@@ -1,0 +1,63 @@
+name: Python CI (Poetry)
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.x
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python -
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+    
+    - name: Configure Poetry
+      run: poetry config virtualenvs.in-project true
+    
+    - name: Install dependencies
+      run: poetry install --no-interaction --no-root
+
+    - name: Create .env
+      run: |
+        echo "RAG_EMBEDDING_MODEL=${{ secrets.RAG_EMBEDDING_MODEL }}" >> .env
+        echo "RAG_CHAT_MODEL=${{ secrets.RAG_CHAT_MODEL }}" >> .env
+        echo "HUGGING_FACE_API_KEY=${{ secrets.HUGGING_FACE_API_KEY }}" >> .env
+        echo "OLLAMA_HOST=${{ secrets.OLLAMA_HOST }}" >> .env
+        echo "WEAVIATE_HOST=${{ secrets.WEAVIATE_HOST }}" >> .env
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Start Docker Compose services
+      uses: hoverkraft-tech/compose-action@v2.0.1
+      with:
+        compose-file: docker-compose.yml
+        up: true # Automatically bring up services
+    
+    - name: Lint with Ruff
+      run: poetry run ruff check
+    
+    - name: Type check with mypy
+      run: poetry run mypy .
+    
+    - name: Test with pytest
+      run: poetry run pytest
+      env:
+        RAG_EMBEDDING_MODEL: ${{ secrets.RAG_EMBEDDING_MODEL }}
+        RAG_CHAT_MODEL: ${{ secrets.RAG_CHAT_MODEL }}
+        HUGGING_FACE_API_KEY: ${{ secrets.HUGGING_FACE_API_KEY }}
+        OLLAMA_HOST: ${{ secrets.OLLAMA_HOST_TEST }}
+        WEAVIATE_HOST: ${{ secrets.WEAVIATE_HOST_TEST }}
+

@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+     - "8000:8000"
+    environment:
+     RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL}
+     RAG_CHAT_MODEL: ${RAG_CHAT_MODEL}
+     HUGGING_FACE_API_KEY: ${HUGGING_FACE_API_KEY}
+     OLLAMA_HOST: ${OLLAMA_HOST}
+     WEAVIATE_HOST: ${WEAVIATE_HOST}
+    networks:
+     - tunedd-network
+  ollama:
+    entrypoint: /bin/bash -c "
+      ollama serve &
+      sleep 2 &&
+      ollama pull $${RAG_EMBEDDING_MODEL} &
+      wait"
+    image: ollama/ollama:latest
+    environment:
+      - OLLAMA_KEEP_ALIVE=-1  # Keep the server running indefinitely
+    env_file:
+      - .env
+    volumes:
+      - tunedd-ollama-data:/root/.ollama
+    ports:
+      - 11434:11434
+    networks:
+      - tunedd-network
+    restart: on-failure
+
+  weaviate:
+    image: semitechnologies/weaviate:1.25.1
+    ports:
+      - 8080:8080
+      - 50051:50051
+    environment:
+      - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
+      - PERSISTENCE_DATA_PATH=/var/lib/weaviate/data
+      - QUERY_DEFAULTS_LIMIT=20
+      - CLUSTER_HOSTNAME=node1
+    volumes:
+      - tunedd-weaviate-data:/var/lib/weaviate/data
+    networks:
+      - tunedd-network
+    restart: on-failure
+
+networks:
+  tunedd-network:
+    driver: bridge
+
+volumes:
+  tunedd-weaviate-data:
+  tunedd-ollama-data:
